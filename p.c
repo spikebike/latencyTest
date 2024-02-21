@@ -142,9 +142,9 @@ followAr (int64_t * a, int64_t size, int repeat)
 }
 
 int
-verifyAr(int64_t * a, int64_t size,int n)
+verifyAr(int64_t * a, int64_t size,int numPages)
 {
-	for (int64_t i=0;i<n*pageSize; i=i+perCacheLine) { 
+	for (int64_t i=0;i<numPages*(pageSize/sizeof(int64_t)); i=i+perCacheLine) { 
       if (i%(pageSize/sizeof(int64_t)) ==0) { 
          printf("\nbase=%04ld ",i/perCacheLine);
       }
@@ -176,10 +176,10 @@ main (int argc, char *argv[])
 	
 	ret=initAr(a,size);
 	printf("Initialized %ld cachelines\n",ret);
-//	ret=verifyAr(a,size,1);
+	ret=verifyAr(a,size,4);
 	ret=shuffleAr(a,size);
-//	ret=verifyAr(a,size,1);
 	if (!ret) { printf ("Shuffle succeded\n"); } else { printf ("shuffle failed\n"); }
+	ret=verifyAr(a,size,4);
 	start = second ();
 	ret=followAr (a, size, 1);
 	end = second();
