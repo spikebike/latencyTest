@@ -1,51 +1,42 @@
-This benchmark p.c is a very simple latency benchmark with cacheline=128
-and array size=1GB hard coded.  
-
-It uses a simple while (p) { p=a[p] } for pointer chasing.
-
-Cacheline=128 is to prevent adjacent cacheline prefetching from helping.  1GB
-is picked to help ensure the array visited is bigger than L3, even if only every other cacheline is visited.
-
-This benchmark is intended to visit a 1GB array with a sliding window.  Each cache line within a page is randomly visited exactly once.  The goal is testing latency but being TLB friendly.
+This benchmark p.c is a simple latency benchmark that uses INT64 arrays and
+while (p) { p=a[p] } for pointer chasing.  For a user defined pagesize 
+each cache line is visited randomly, exactly once before moving to the next page
 
 To verify:
 
-1) uncomment the two printf("ptr=%p\n",(void *)&p[b]); in followAr()
+1) compile with -DPRINT:
+	gcc -DPRINT -O3 -Wall -pedantic p.c -o p && ./p | egrep "^0x" | wc -l
 
-2) run:
-	gcc -O3 -Wall -pedantic p.c && ./a.out  | egrep "^0x" | wc -l
+2) verify that you see "8388608" which is 1GB / 128 byte cachelines
 
-3) verify that you see "8388608" which is 1GB / 128 byte cachlines
-
-4) run:
-	gcc -O3 -Wall -pedantic p.c && ./a.out  | egrep "^0x" | sort | uniq > log
+3) run:
+	gcc -O3 -DPRINT -Wall -pedantic p.c && ./p | egrep "^0x" | sort | uniq > log
 	wc -l log
 
-5) verify that it says 8388608, this indicates that there were exactly that number of unique addresses visited (no cache friendly repeats).
+4) verify that it says 8388608, this indicates that there were exactly that number of unique addresses visited (no cache friendly repeats).
 
-6) run:
+5) run:
 	go run hexdiff.go log  | uniq # or perl, but go takes 5 seconds and perl takes 6+ minutes
 
-7) verify that the output is a single line of "Difference: 128", this shows
-   that all 8388608 were exactly 128 bytes apart.
+6) verify that the output is a single line of "Difference: 128", this shows
+   that all 8388608 pointers were exactly 128 bytes apart.
 
-So in summary:
+7) in summary:
 	* this code visits 8M unique cache lines
 	* when printed each 8M address is unique
 	* each address is in a single cacheline (no cacheline load can load 2 addresses)
-	* the code is single threaded and each load is dependent on the previous
+	* the code is single threaded and each load is dependent on the previous load
 	* this happens on a Ryzen 7900 at 10ns per load.
 
 Example run:
 
-	$ gcc -O3 -Wall -pedantic p.c && ./a.out
+	$ gcc -O3 -Wall -pedantic p.c -o p  && ./p 4096 128
 	Allocated 1073741824 bytes or 134217728 INT64s succeeded.
 	cacheLinesPerPage=32
 	Initialized 8388608 cachelines
-	Shuffle completed
 	Shuffle succeded
 	visited 8388608 cachelines
-	took 0.0834441 seconds, 9.947314 ns per cachelineA
+
 
 This program allocates a 1GB array than for each page (512 INT64s) it builds an array with:
 
@@ -55,17 +46,20 @@ This program allocates a 1GB array than for each page (512 INT64s) it builds an 
 		cnt++;
 	}
 
-So the beginning of each cacheline has the index of the array member of the next cache line, if printed, one cache line per 4KB page:
+So the beginning of each cacheline has the index of the array member of the next cache line, if printed, one cache line per 4KB page.  Compile with -DVERIFY
+
 base=0000 16 32 48 64 80 96 112 128 144 160 176 192 208 224 240 256 272 288 304 320 336 352 368 384 400 416 432 448 464 480 496 0 
 base=0032 16 32 48 64 80 96 112 128 144 160 176 192 208 224 240 256 272 288 304 320 336 352 368 384 400 416 432 448 464 480 496 0 
 
-So you can walk that page with a simple: while (p) { p = b[p]; } 
+This would lead to sequential cache line access, which is easy to prefetch to fix that
+the cachelines are shuffled:
 
-To prevent prefetching I randomize it with a sort, so the above becomes:
 base=0000 96 480 176 224 432 112 416 400 16 288 384 240 320 496 64 448 160 464 32 256 336 272 0 304 80 208 192 128 352 368 144 48 
 base=0032 336 304 144 0 320 32 256 480 416 288 272 208 176 432 448 64 368 96 496 224 80 400 464 16 48 240 160 352 112 384 192 128 
 
+Then I walk those cacheliens randomly with: while (p) { p = b[p]; } 
+
 So each cacheline of a page is loaded randomly, exactly once, then it proceeds to the next page.
 
-To see how the array is setup pre and post shuffle uncomment the verifyAr() in main.
+To see how the array is setup pre and post shuffle compile with gcc -DVERIFY
 
