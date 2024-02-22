@@ -118,7 +118,10 @@ shuffleAr(int64_t *a, int64_t size, int64_t **visitOrder)
    }
    followPages = size / (pageSize/sizeof(int64_t));
    *visitOrder = (int64_t*)malloc(sizeof(int64_t)*followPages); 
-
+	if (!visitOrder) { 
+		printf ("Malloc of visitOrder failed\n");
+		exit(-1);
+	}
    //
 	// To prevent hitting every cacheline of page N and having page N+1 prefetched do
    // a random sort of pages.  This allows TLB friendliness without prefetch.
@@ -145,6 +148,7 @@ shuffleAr(int64_t *a, int64_t size, int64_t **visitOrder)
         (*visitOrder)[i] = (*visitOrder)[j];
         (*visitOrder)[j] = temp;
    }  
+	printf ("Pages randomized, ");
 #endif
 	return(0);	
 }
@@ -207,7 +211,7 @@ verifyAr(int64_t * a, int64_t size,int numPages)
       }
       printf("%ld ",a[i]); 
    }
-	printf("\n");
+	printf("\n\n");
 	return(0);
 }
 
