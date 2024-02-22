@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-#define _MULTI_THREADED
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/param.h>
@@ -83,7 +81,7 @@ initAr(int64_t *a,int64_t size)
    while (base<size)
 	{
 		b=&a[base]; 
-		for (i = 0; i < pageSize/sizeof(int64_t); i = i + perCacheLine)
+		for (i = 0; i < (int64_t)(pageSize/sizeof(int64_t)); i = i + perCacheLine)
 		{
 			b[i] = i + perCacheLine;	/* assign each int the index of the next int */
 			cnt++;
@@ -106,7 +104,7 @@ shuffleAr(int64_t *a, int64_t size, int64_t **visitOrder)
    while (base<size)
    {
 		b=&a[base];
-		for (int64_t i = 0; i < pageSize/sizeof(int64_t); i = i + perCacheLine)
+		for (int64_t i = 0; i < (int64_t)(pageSize/sizeof(int64_t)); i = i + perCacheLine)
 		{
 			c = choose (i, pageSize/sizeof(int64_t) - perCacheLine);
 			x = b[i];
@@ -123,15 +121,13 @@ shuffleAr(int64_t *a, int64_t size, int64_t **visitOrder)
 		exit(-1);
 	}
    //
-	// To prevent hitting every cacheline of page N and having page N+1 prefetched do
-   // a random sort of pages.  This allows TLB friendliness without prefetch.
+	// We shuffle the pages to try to prevent prefetch from hiding latency.
    // 
-	// if you visit 64 cachelines of 4k page N, randomly, with dependent loads, it looks
-   // quite a bit like 64 sequential loads with stride of 4k to the hardware.  Triggering
-	// prefetch of page N+1.  Thus latencies round about 10ns instread of 8 times higher.
+	// If you visit all 64 cache lines of a 4k page, randomly, with dependent loads, it looks
+   // quite a bit like a per cache line load with a stride of 4k.
    //
-   // Ideas welcome to fixing this, while not thrashing the TLB.
-
+   // Ideas welcome to fixing this, while not thrashing the TLB, welcome.
+	//
    // Init the page order to squentially visit each page
    for (int64_t i=0; i<followPages; i++)
    {
@@ -181,6 +177,15 @@ followAr (int64_t *a, int64_t size, int64_t *visitOrder,int repeat)
 #ifdef PRINT
 			printf("%p\n",(void *)&p[b]);
 #endif
+/* asm for the while loop, from https://godbolt.org
+        test    rax, rax
+        je      .L79
+.L80:
+        mov     rax, QWORD PTR [rdx+rax*8]
+        test    rax, rax
+        jne     .L80
+.L79:
+*/
 			while (p) // Visit cachelines until we get zero
 			{
 				p = b[p]; // Dependent load to visit next cacheline
@@ -205,7 +210,9 @@ followAr (int64_t *a, int64_t size, int64_t *visitOrder,int repeat)
 int
 verifyAr(int64_t * a, int64_t size,int numPages)
 {
-	for (int64_t i=0;i<numPages*(pageSize/sizeof(int64_t)); i=i+perCacheLine) { 
+	int64_t m;
+	m=MIN(size,numPages*(pageSize/sizeof(int64_t)));
+	for (int64_t i=0;i<m; i=i+perCacheLine) { 
       if (i%(pageSize/sizeof(int64_t)) ==0) { 
          printf("\nbase=%04ld ",i/perCacheLine);
       }
