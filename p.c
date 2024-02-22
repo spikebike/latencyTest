@@ -17,17 +17,22 @@
 #include <sys/ioctl.h>
 #include <linux/perf_event.h>
 
+/* latency benchmark version 0.9 - written by Bill Broadley bill@broadley.org 
 
+ Designed to explore single thread latency with while (p) { p=a[p] } to force
+ dependent loads.  Shuffling is used to help prevent prefetching from hiding the
+ real memory latency.
 
-#ifdef USEHUGE
-#include <sys/mman.h>
-#endif
-#ifdef USENUMA
-#include <numa.h>
-#endif
+ To compile
+    gcc -Wall -pedantic -O4 p.c -o p
 
-int pageSize = 4096*8;
-int cacheLineSize = 64;		  /* bytes per cacheline */
+ to run: 
+    ./a.out 4096 128 # pages of 4k, cache lines of 128 bytes
+
+*/
+
+int pageSize;
+int cacheLineSize;
 int perCacheLine;
 int cacheLinesPerPage;
 
@@ -95,7 +100,6 @@ shuffleAr(int64_t *a, int64_t size, int64_t **visitOrder)
 	int64_t base,c,x,y;
 	int64_t *b;
 	int64_t followPages;
-	int64_t i;
 
 	srand48 ((long int) getpid ());
 	base=0;
@@ -114,16 +118,25 @@ shuffleAr(int64_t *a, int64_t size, int64_t **visitOrder)
    }
    followPages = size / (pageSize/sizeof(int64_t));
    *visitOrder = (int64_t*)malloc(sizeof(int64_t)*followPages); 
+
+   //
 	// To prevent hitting every cacheline of page N and having page N+1 prefetched do
    // a random sort of pages.  This allows TLB friendliness without prefetch.
+   // 
+	// if you visit 64 cachelines of 4k page N, randomly, with dependent loads, it looks
+   // quite a bit like 64 sequential loads with stride of 4k to the hardware.  Triggering
+	// prefetch of page N+1.  Thus latencies round about 10ns instread of 8 times higher.
+   //
+   // Ideas welcome to fixing this, while not thrashing the TLB.
 
    // Init the page order to squentially visit each page
-   for (i=0; i<followPages; i++)
+   for (int64_t i=0; i<followPages; i++)
    {
       (*visitOrder)[i]=i;
    }
+#ifdef RANDOM
    // Randomize it to prevent page N+1 prefection while accessing every cacheline of N
-   for ( i = followPages - 1; i > 0; i--) {
+   for (int64_t  i = followPages - 1; i > 0; i--) {
         // Pick a random index from 0 to i
         int j = rand() % (i + 1);
         
@@ -131,12 +144,8 @@ shuffleAr(int64_t *a, int64_t size, int64_t **visitOrder)
         int temp = (*visitOrder)[i];
         (*visitOrder)[i] = (*visitOrder)[j];
         (*visitOrder)[j] = temp;
-   } 
-/*   for (i=0; i<followPages; i++)
-   {
-      printf("%ld\n",(*visitOrder)[i]);
-   } */
-
+   }  
+#endif
 	return(0);	
 }
 
@@ -146,11 +155,12 @@ followAr (int64_t *a, int64_t size, int64_t *visitOrder,int repeat)
 	int64_t p;
 	int64_t *b;
 	int64_t base;
-	int64_t cnt;
+#ifdef CNT
+	int64_t cnt=0;
+#endif 
 	int64_t followPages,pagesRead,i;
 //	int64_t sum;
 
-	cnt=0;
 //	sum=0;
 	followPages = size / (pageSize/sizeof(int64_t));
 	for (i = 0; i < repeat; i++)
@@ -159,21 +169,33 @@ followAr (int64_t *a, int64_t size, int64_t *visitOrder,int repeat)
 		while (pagesRead<followPages) {
 			base=visitOrder[pagesRead]*pageSize/sizeof(int64_t);
 			b=&a[base];  // start pointer chasing at begin of page
-			p=b[0];
+			p=b[0];  // first access of a new page
+#ifdef CNT
 			cnt++;
+#endif
 //  uncomment to debug addresses
-//			printf("%p\n",(void *)&p[b]);
-			while (p)
+#ifdef PRINT
+			printf("%p\n",(void *)&p[b]);
+#endif
+			while (p) // Visit cachelines until we get zero
 			{
-				p = b[p];
+				p = b[p]; // Dependent load to visit next cacheline
 //				sum += p;
-//				printf("%p\n",(void *)&p[b]);
+#ifdef PRINT
+				printf("%p\n",(void *)&p[b]);
+#endif
+#ifdef CNT
 				cnt++;
+#endif
 			}
-			pagesRead++;
+			pagesRead++; // Increment to next random page, NOT next sequential page
 		}
 	}
+#ifdef CNT
 	return (cnt);
+#else
+	return (0);
+#endif
 }
 
 int
@@ -202,7 +224,7 @@ int initialize_perf_event_attr(struct perf_event_attr *pe) {
 
 	int fd = syscall(__NR_perf_event_open, pe, 0, -1, -1, 0);
 	if (fd == -1) {
-		fprintf(stderr, "Error opening perf event\n");
+		fprintf(stderr, "Error opening perf event, might need to run as root or tweak capabilities\n");
 		exit(EXIT_FAILURE);
 	}
 	return fd;
@@ -215,16 +237,21 @@ main (int argc, char *argv[])
 	int64_t size,ret;
 	int64_t maxmem=1073741824; // 1GB 
 	double start,end;
-	int fd;
 
+#ifdef TLB
+	int fd;
 	struct perf_event_attr pe;
 	fd=initialize_perf_event_attr(&pe);
-
-    // Measure before workload
 	ioctl(fd, PERF_EVENT_IOC_RESET, 0);
-
-	pageSize= atoi(argv[1]);
-	cacheLineSize= atoi(argv[2]);
+#endif
+	if (argc<3) {
+		printf ("Try ./p 4096 128  # 4096 for the page size 128 for the cache line size\n\n");
+		pageSize=4096;
+		cacheLineSize=128;
+	} else {
+		pageSize= atoi(argv[1]);
+		cacheLineSize= atoi(argv[2]);
+	}
 
 	cacheLinesPerPage = pageSize/cacheLineSize;
 	perCacheLine = cacheLineSize/sizeof(int64_t);
@@ -240,14 +267,27 @@ main (int argc, char *argv[])
 	
 	ret=initAr(a,size);
 	printf("Initialized %ld cachelines\n",ret);
-//	ret=verifyAr(a,size,4);
+#ifdef VERIFY 
+	printf ("in order page traversal\n");
+	ret=verifyAr(a,size,4);
+#endif
 	ret=shuffleAr(a,size,&visitOrder);
 	if (!ret) { printf ("Shuffle succeded\n"); } else { printf ("shuffle failed\n"); }
-//	ret=verifyAr(a,size,4);
+#ifdef VERIFY 
+	printf ("shuffled page traversal\n");
+	ret=verifyAr(a,size,4);
+#endif
+#ifdef TLB
    ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
+#endif
 	start = second ();
 	ret=followAr (a, size, visitOrder,1);
 	end = second();
+#ifndef CNT                  // calculate cachelines if CNT is not defined
+	ret=maxmem/cacheLineSize; // actually count each cacheline acces if CNT is defined
+#endif
+
+#ifdef TLB
    ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
 	printf("visited %ld cachelines\n",ret);
 	 long long count;
@@ -255,8 +295,11 @@ main (int argc, char *argv[])
         perror("read");
         exit(EXIT_FAILURE);
     }
-
-//	ret=8388608;
-	printf ("took %f seconds, %f ns per cacheline, pageSize=%d, cacheLine=%d, pages=%ld tlbmiss=%lld\n",end-start,((end-start)/ret)*1000000000,pageSize,cacheLineSize,maxmem/pageSize,count );
+#endif
+	printf ("took %f seconds, %f ns per cacheline, pageSize=%d, cacheLine=%d, pages=%ld ",end-start,((end-start)/ret)*1000000000,pageSize,cacheLineSize,maxmem/pageSize);
+#ifdef TLB
+	printf ("tlb misses=%lld\n",count);
+#else
+	printf ("\n");
+#endif
 }
-
