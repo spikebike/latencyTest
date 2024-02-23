@@ -133,7 +133,6 @@ followAr (int64_t *a, int64_t size, int64_t *visitOrder,int repeat)
 	int64_t base;
 #ifdef CNT
 	int64_t cnt=0;
-	int64_t pcnt=0;
 #endif 
 	int64_t followPages,pagesRead,i;
 #ifdef SUM
@@ -150,8 +149,6 @@ followAr (int64_t *a, int64_t size, int64_t *visitOrder,int repeat)
 			p=b[0];  // first access of a new page
 #ifdef CNT
 			cnt++;
-			pcnt=0;
-			pcnt++;
 #endif
 #ifdef PRINT
 			printf("%p\n",(void *)&p[b]);
@@ -167,10 +164,8 @@ followAr (int64_t *a, int64_t size, int64_t *visitOrder,int repeat)
 #endif
 #ifdef CNT
 				cnt++;
-				pcnt++;
 #endif
 			}
-//			printf ("pcnt=%ld ",pcnt);
 			pagesRead++; // Increment to next random page, NOT next sequential page
 		}
 	}
@@ -285,7 +280,7 @@ main (int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 #endif
-	printf ("took %f seconds, %f ns per cacheline, pageSize=%d, cacheLine=%d, pages=%ld ",end-start,((end-start)/ret)*1000000000,pageSize,cacheLineSize,maxmem/pageSize);
+	printf ("took %f seconds, %f ns per cacheline, pageSize= %d , cacheLine=%d, pages=%ld ",end-start,((end-start)/ret)*1000000000,pageSize,cacheLineSize,maxmem/pageSize);
 #ifdef TLB
 	printf ("tlb misses=%lld\n",count);
 #else
