@@ -70,7 +70,7 @@ initAr(int64_t *a,int64_t size)
 int
 shuffleAr(int64_t *a, int64_t size, int64_t **visitOrder)
 {
-	int64_t base,c,x,y,j;
+	int64_t base;
 	int64_t *b;
 	int64_t followPages;
 

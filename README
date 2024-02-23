@@ -42,7 +42,7 @@ This program allocates a 1GB array than for each page (512 INT64s) it builds an 
 
 	for (i = 0; i < pageSize/sizeof(int64_t); i = i + perCacheLine)
    {
-		b[i] = i + perCacheLine;   /* assign each int the index of the next int */
+		b[i] = i;
 		cnt++;
 	}
 
