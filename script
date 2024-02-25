@@ -1,0 +1,22 @@
+
+set title "Random Window Size vs Latency for 1GB walk" font "verdanab,14"
+set xlabel "sliding random window size" font "verdanab,14"
+
+set y2label "TLB misses" font "verdanab,14"
+set ylabel "ns" font "verdanab,14"
+
+
+set logscale x 2
+set xtics ("4k" 4096,"8k" 8192,"16k" 16384,"32k" 32768,"64k" 65536,"128k" 131072,"256k" 262144,"512k" 524288,"1M" 1048576, "2M" 2097152,"4M" 4194304,"8M" 8388608,"16M" 16777216,"32M" 33554432)
+set y2range [262144:16777216]
+set ytics nomirror
+
+unset y2tics
+set y2tics ("0 262144" 262144,"16x" 4194304, "32x" 8388608, "48x" 12582912, "64x" 16777216)
+
+plot 'p.dat' using 2:1 with lines lw 2 axis x1y1 title "Ryzen 7900 random pages",'p.dat' using 2:3 with lines axis x1y2 title "TLB misses"
+replot 'e3r2.log' using 2:1 with lines lw 2 axis x1y1 title "E3-1230v4 random pages",'e3r2.log' using 2:3 with lines axis x1y2 title "TLB misses"
+
+
+
+
