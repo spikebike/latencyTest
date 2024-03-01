@@ -33,6 +33,7 @@ int pageSize;
 int cacheLineSize;
 int perCacheLine;
 int cacheLinesPerPage;
+int intsPerPage;
 
 double
 second ()
@@ -144,7 +145,7 @@ followAr (int64_t *a, int64_t size, int64_t *visitOrder,int repeat)
 	{
 		pagesRead=0;
 		while (pagesRead<followPages) {
-			base=visitOrder[pagesRead]*pageSize/sizeof(int64_t);
+			base=visitOrder[pagesRead]*intsPerPage;
 			b=&a[base];  // start pointer chasing at begin of page
 			p=b[0];  // first access of a new page
 #ifdef CNT
@@ -218,8 +219,10 @@ main (int argc, char *argv[])
 {
 	int64_t *a,*visitOrder=NULL;
 	int64_t size,ret;
-	int64_t maxmem=1073741824; // 1GB 
+//	int64_t maxmem=1073741824; // 1GB 
+	int64_t maxmem=1048576/2; // 1GB 
 	double start,end;
+
 
 #ifdef TLB
 	int fd;
@@ -230,11 +233,13 @@ main (int argc, char *argv[])
 	if (argc<3) {
 		printf ("Try ./p 4096 128  # 4096 for the page size 128 for the cache line size\n\n");
 		pageSize=4096;
-		cacheLineSize=128;
+		cacheLineSize=64;
 	} else {
 		pageSize= atoi(argv[1]);
 		cacheLineSize= atoi(argv[2]);
 	}
+	
+	intsPerPage = pageSize/sizeof(int64_t);	
 
 	cacheLinesPerPage = pageSize/cacheLineSize;
 	perCacheLine = cacheLineSize/sizeof(int64_t);
@@ -264,7 +269,7 @@ main (int argc, char *argv[])
    ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
 #endif
 	start = second ();
-	ret=followAr (a, size, visitOrder,1);
+	ret=followAr (a, size, visitOrder,10000);
 	end = second();
 #ifndef CNT                  // calculate cachelines if CNT is not defined
 	ret=maxmem/cacheLineSize; // actually count each cacheline acces if CNT is defined
@@ -280,7 +285,7 @@ main (int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 #endif
-	printf ("took %f seconds, %f ns per cacheline, pageSize= %d , cacheLine=%d, pages=%ld ",end-start,((end-start)/ret)*1000000000,pageSize,cacheLineSize,maxmem/pageSize);
+	printf ("took %f seconds, %f ns per cacheline, pageSize= %d, cacheLine=%d, pages=%ld ",end-start,((end-start)/ret)*1000000000,pageSize,cacheLineSize,maxmem/pageSize);
 #ifdef TLB
 	printf ("tlb misses=%lld\n",count);
 #else
