@@ -16,6 +16,7 @@ set y2tics ("0 262144" 262144,"16x" 4194304, "32x" 8388608, "48x" 12582912, "64x
 
 plot 'p.dat' using 2:1 with lines lw 2 axis x1y1 title "Ryzen 7900 random pages",'p.dat' using 2:3 with lines axis x1y2 title "TLB misses"
 replot 'e3r2.log' using 2:1 with lines lw 2 axis x1y1 title "E3-1230v4 random pages",'e3r2.log' using 2:3 with lines axis x1y2 title "TLB misses"
+replot 'zen2.dat' using 2:1 with lines lw 2 axis x1y1 title "zen2 random pages",'zen2.dat' using 2:3 with lines axis x1y2 title "TLB misses"
 
 
 
