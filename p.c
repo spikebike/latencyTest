@@ -34,6 +34,7 @@ int cacheLineSize;
 int perCacheLine;
 int cacheLinesPerPage;
 int intsPerPage;
+int REPEAT=10000;
 
 double
 second ()
@@ -220,7 +221,7 @@ main (int argc, char *argv[])
 	int64_t *a,*visitOrder=NULL;
 	int64_t size,ret;
 //	int64_t maxmem=1073741824; // 1GB 
-	int64_t maxmem=1048576/2; // 1GB 
+	int64_t maxmem=1048576/2; // 512MB
 	double start,end;
 
 
@@ -269,10 +270,10 @@ main (int argc, char *argv[])
    ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
 #endif
 	start = second ();
-	ret=followAr (a, size, visitOrder,10000);
+	ret=followAr (a, size, visitOrder,REPEAT);
 	end = second();
 #ifndef CNT                  // calculate cachelines if CNT is not defined
-	ret=maxmem/cacheLineSize; // actually count each cacheline acces if CNT is defined
+	ret=maxmem/cacheLineSize*REPEAT; // actually count each cacheline acces if CNT is defined
 #else
 	printf("visited %ld cachelines\n",ret);
 #endif
