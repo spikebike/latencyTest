@@ -221,7 +221,7 @@ main (int argc, char *argv[])
 	int64_t *a,*visitOrder=NULL;
 	int64_t size,ret;
 //	int64_t maxmem=1073741824; // 1GB 
-	int64_t maxmem=1048576/2; // 512MB
+	int64_t maxmem=256*1024; // 512MB
 	double start,end;
 
 
@@ -286,7 +286,7 @@ main (int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 #endif
-	printf ("took %f seconds, %f ns per cacheline, pageSize= %d, cacheLine=%d, pages=%ld ",end-start,((end-start)/ret)*1000000000,pageSize,cacheLineSize,maxmem/pageSize);
+	printf ("%f seconds, %f ns per hop, pageSize=%6d cacheline=%d, pages=%ld hops=%ld repeat=%d size=%ld bytes",end-start,((end-start)/ret)*1000000000,pageSize,cacheLineSize,maxmem/pageSize,ret,REPEAT,size*sizeof(int64_t));
 #ifdef TLB
 	printf ("tlb misses=%lld\n",count);
 #else
